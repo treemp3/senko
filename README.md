@@ -10,6 +10,8 @@
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
+原程序基于 github 代码存储库实现，https请求时内存不足（ESP32），修改为 http 文件服务实现。
+
 Senko is the simplest **Over The Air** updater solution for your **Micropython** projects based on **ESP8266** and **ESP32**.
 
 Senko synchronizes selected files on your microcontroller with the remote ones from **GitHub** repository.  
