@@ -1,29 +1,22 @@
-import urequests
-import uhashlib
+import urequests, uhashlib, sys
 
 
 class Senko:
-    raw = "https://raw.githubusercontent.com"
-    github = "https://github.com"
+    """原程序基于github代码存储库实现，https请求时内存溢出，修改为http文件服务实现"""
 
-    def __init__(self, user, repo, url=None, branch="master", working_dir="app", files=["boot.py", "main.py"], headers={}):
+    def __init__(self, url, files=["boot.py", "main.py"], headers={}):
         """Senko OTA agent class.
-
         Args:
-            user (str): GitHub user.
-            repo (str): GitHub repo to fetch.
-            branch (str): GitHub repo branch. (master)
-            working_dir (str): Directory inside GitHub repo where the micropython app is.
             url (str): URL to root directory.
             files (list): Files included in OTA update.
             headers (list, optional): Headers for urequests.
         """
-        self.base_url = "{}/{}/{}".format(self.raw, user, repo) if user else url.replace(self.github, self.raw)
-        self.url = url if url is not None else "{}/{}/{}".format(self.base_url, branch, working_dir)
+        self.url = url
         self.headers = headers
         self.files = files
 
     def _check_hash(self, x, y):
+        """检查文件指纹是否一致"""
         x_hash = uhashlib.sha1(x.encode())
         y_hash = uhashlib.sha1(y.encode())
 
@@ -36,57 +29,47 @@ class Senko:
             return False
 
     def _get_file(self, url):
-        payload = urequests.get(url, headers=self.headers)
-        code = payload.status_code
+        text = ""
+        try:
+            payload = urequests.get(url, headers=self.headers)
+            code = payload.status_code
+            if code == 200:
+                text = payload.text
+        except OSError as err:
+            sys.print_exception(err)
+        except Exception as err:
+            sys.print_exception(err)
 
-        if code == 200:
-            return payload.text
-        else:
-            return None
+        return text
 
-    def _check_all(self):
-        changes = []
+    def update(self):
+        """Replace all changed files with newer one.
+        Returns:
+            True - if changes were made, False - if not.
+        """
+        is_changed = False
 
         for file in self.files:
-            latest_version = self._get_file(self.url + "/" + file)
-            if latest_version is None:
-                continue
+            print('Now start comparing file differences: {}'.format(file))
+            latest_version = self._get_file(self.url + file)
+            if not latest_version:
+                print('An exception occurred while downloading the latest file')
+                break
 
             try:
                 with open(file, "r") as local_file:
                     local_version = local_file.read()
             except:
+                print('An exception occurred while reading the local file')
                 local_version = ""
 
-            if not self._check_hash(latest_version, local_version):
-                changes.append(file)
+            if self._check_hash(latest_version, local_version):
+                print('File comparison result: No changed')
+                continue
 
-        return changes
-
-    def fetch(self):
-        """Check if newer version is available.
-
-        Returns:
-            True - if is, False - if not.
-        """
-        if not self._check_all():
-            return False
-        else:
-            return True
-
-    def update(self):
-        """Replace all changed files with newer one.
-
-        Returns:
-            True - if changes were made, False - if not.
-        """
-        changes = self._check_all()
-
-        for file in changes:
+            is_changed = True
+            print('The file has changed and a new file will be written')
             with open(file, "w") as local_file:
-                local_file.write(self._get_file(self.url + "/" + file))
+                local_file.write(latest_version)
 
-        if changes:
-            return True
-        else:
-            return False
+        return is_changed
